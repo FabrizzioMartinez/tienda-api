@@ -1,16 +1,15 @@
-# Usa la imagen oficial de .NET para compilar
+# 1. Fase de compilación
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
-# Copia los archivos y compila
-COPY . ./
+# Copia todo el contenido de la carpeta Tienda.API al contenedor
+COPY Tienda.API/ ./ 
 RUN dotnet publish -c Release -o out
 
-# Usa la imagen de ejecución para el resultado final
+# 2. Fase de ejecución
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app/out .
 
-# Expone el puerto y ejecuta
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Tienda.API.dll"]
