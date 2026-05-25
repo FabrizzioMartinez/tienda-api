@@ -30,7 +30,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("PermitirAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins("http://localhost:4200",
+        "https://tienda-front-5d8p9j12g-fabrizziomartinezs-projects.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
