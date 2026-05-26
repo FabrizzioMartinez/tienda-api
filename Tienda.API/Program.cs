@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using Tienda.API.Data;
 using Tienda.API.Interfaces;
@@ -18,26 +18,31 @@ var connectionString = builder.Configuration.GetConnectionString("TiendaConnecti
 builder.Services.AddDbContext<TiendaDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// 2. Registro de Servicios (Dependency Injection)
+// 2. Registro de Servicios
 builder.Services.AddScoped<IProductoService, ProductoService>();
 builder.Services.AddScoped<IMarcaService, MarcaService>();
 builder.Services.AddScoped<ITipoProductoService, TipoProductoService>();
 builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
 builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
-// 3. Configuración de CORS
+
+// 3. Configuración de CORS - Agregamos todas las variantes posibles
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PermitirAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200",
-        "https://tienda-front-5d8p9j12g-fabrizziomartinezs-projects.vercel.app")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+            "http://localhost:4200", 
+            "https://tienda-front-khaki.vercel.app", // Tu dominio actual
+            "https://tienda-front.vercel.app",       // Posible dominio principal
+            "https://tienda-front-5d8p9j12g-fabrizziomartinezs-projects.vercel.app" // Tu URL larga
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod();
     });
 });
 
-// 4. Configuración de Controladores y Serialización JSON
+// 4. Configuración de Controladores
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -48,7 +53,7 @@ builder.Services.AddControllers()
 var app = builder.Build();
 
 // 5. Middlewares
-app.UseCors("PermitirAngular");
+app.UseCors("PermitirAngular"); // <-- Crucial: debe estar antes de MapControllers
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
