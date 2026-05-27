@@ -9,6 +9,8 @@ using Tienda.API.Services;
 using Tienda.API.Services.Cliente;
 using Tienda.API.Services.Venta;
 using Npgsql;
+using Tienda.API.Interfaces.MaestroTabla;
+using Tienda.API.Services.MaestroTabla;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
