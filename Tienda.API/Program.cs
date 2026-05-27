@@ -4,15 +4,13 @@ using Tienda.API.Data;
 using Tienda.API.Interfaces;
 using Tienda.API.Interfaces.Cliente;
 using Tienda.API.Interfaces.Venta;
-using Tienda.API.Interfaces.Maestro; // 👈 Agregado para Docker
+using Tienda.API.Interfaces.MaestroTabla; // 👈 Agregado para Docker
 using Tienda.API.Models;
 using Tienda.API.Services;
 using Tienda.API.Services.Cliente;
 using Tienda.API.Services.Venta;
-using Tienda.API.Services.Maestro;   // 👈 Agregado para Docker
+using Tienda.API.Services.MaestroTabla;   // 👈 Agregado para Docker
 using Npgsql;
-using Tienda.API.Interfaces.MaestroTabla;
-using Tienda.API.Services.MaestroTabla;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
