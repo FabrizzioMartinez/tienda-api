@@ -25,6 +25,7 @@ builder.Services.AddScoped<ITipoProductoService, TipoProductoService>();
 builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
 builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
+builder.Services.AddScoped<IMaestroService, MaestroService>();
 
 // 3. Configuración de CORS - Agregamos todas las variantes posibles
 builder.Services.AddCors(options =>
