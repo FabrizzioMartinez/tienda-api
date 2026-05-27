@@ -4,10 +4,12 @@ using Tienda.API.Data;
 using Tienda.API.Interfaces;
 using Tienda.API.Interfaces.Cliente;
 using Tienda.API.Interfaces.Venta;
+using Tienda.API.Interfaces.Maestro; // 👈 Agregado para Docker
 using Tienda.API.Models;
 using Tienda.API.Services;
 using Tienda.API.Services.Cliente;
 using Tienda.API.Services.Venta;
+using Tienda.API.Services.Maestro;   // 👈 Agregado para Docker
 using Npgsql;
 using Tienda.API.Interfaces.MaestroTabla;
 using Tienda.API.Services.MaestroTabla;
@@ -27,7 +29,7 @@ builder.Services.AddScoped<ITipoProductoService, TipoProductoService>();
 builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
 builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
-builder.Services.AddScoped<IMaestroService, MaestroService>();
+builder.Services.AddScoped<IMaestroService, MaestroService>(); // 👈 Ya no dará error CS0246
 
 // 3. Configuración de CORS - Agregamos todas las variantes posibles
 builder.Services.AddCors(options =>
