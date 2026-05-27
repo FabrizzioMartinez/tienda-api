@@ -17,42 +17,74 @@ namespace Tienda.API.Services.Venta
 
         public async Task<bool> RegistrarVentaAsync(VentaCreateDto dto)
         {
+            if (dto.Detalles == null || !dto.Detalles.Any())
+                return false;
+
+            if (dto.Total <= 0)
+                return false;
+
+            // Evaluamos los montos de entrada de forma segura
+            decimal montoEfectivoEval = dto.MontoEfectivo ?? 0.00m;
+            decimal montoDigitalEval = dto.MontoDigital ?? 0.00m;
+
+            if (!dto.EsCredito)
+            {
+                if ((montoEfectivoEval + montoDigitalEval) != dto.Total)
+                {
+                    return false;
+                }
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
                 var nowUtc = DateTime.UtcNow;
 
-                // 🔎 VALIDACIÓN: detalles
-                if (dto.Detalles == null || !dto.Detalles.Any())
-                    return false;
-
-                if (dto.Total <= 0)
-                    return false;
-
-                // 🧠 CLIENTE: obtener o crear automáticamente
-                var cliente = await ObtenerOCrearClienteAsync(dto.ClienteNombre,dto.NumeroComprobante, dto.TipoDocumento);
+                var cliente = await ObtenerOCrearClienteAsync(dto.ClienteNombre, dto.NumeroComprobante, dto.TipoDocumento);
 
                 if (cliente == null || cliente.ClienteID <= 0)
                     return false;
 
-                // 1. CABECERA
                 var venta = new Tienda.API.Models.Venta
                 {
                     ClienteID = cliente.ClienteID,
                     TipoComprobante = dto.TipoComprobante,
                     NumeroComprobante = dto.NumeroComprobante,
-                    Total = dto.Total,
+                    // 🚀 El total de la venta se calcula dinámicamente según los métodos de pago (Efectivo + Digital)
+                    // Si es crédito, toma el total enviado; de lo contrario, suma ambos montos pagados.
+                    Total = dto.EsCredito ? dto.Total : (montoEfectivoEval + montoDigitalEval),
                     EsCredito = dto.EsCredito,
-                    FechaRegistro = nowUtc
+                    FechaRegistro = nowUtc,
+                    EsEfectivo = dto.EsEfectivo,
+                    MontoEfectivo = montoEfectivoEval,
+                    EsDigital = dto.EsDigital,
+                    MontoDigital = montoDigitalEval
                 };
 
                 _context.Ventas.Add(venta);
                 await _context.SaveChangesAsync();
 
-                // 2. DETALLES
                 foreach (var item in dto.Detalles)
                 {
+                    var producto = await _context.Productos.FindAsync(item.ProductoID);
+
+                    if (producto == null)
+                    {
+                        Console.WriteLine($"[Error Stock]: El producto con ID {item.ProductoID} no existe.");
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    if (producto.Stock < item.Cantidad)
+                    {
+                        Console.WriteLine($"[Error Stock]: Stock insuficiente para {producto.Nombre}. Disponible: {producto.Stock}, Solicitado: {item.Cantidad}");
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+
+                    producto.Stock -= item.Cantidad;
+
                     var detalle = new Tienda.API.Models.DetalleVenta
                     {
                         VentaID = venta.VentaID,
@@ -68,7 +100,6 @@ namespace Tienda.API.Services.Venta
 
                 await _context.SaveChangesAsync();
 
-                // 3. CRÉDITO
                 if (dto.EsCredito)
                 {
                     var cuenta = new CuentaPorCobrar
@@ -88,8 +119,9 @@ namespace Tienda.API.Services.Venta
                 await transaction.CommitAsync();
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[Error al registrar venta]: {ex.Message}");
                 await transaction.RollbackAsync();
                 return false;
             }
@@ -98,11 +130,9 @@ namespace Tienda.API.Services.Venta
         #region Cliente
         public async Task<ClienteDto> ObtenerOCrearClienteAsync(string nombre, string numeroDocumento, string tipoDocumento)
         {
-            // 🔎 buscar cliente existente
             var cliente = await _context.Clientes
                 .FirstOrDefaultAsync(c => c.NumeroDocumento == numeroDocumento);
 
-            // ✔ si existe, lo devolvemos
             if (cliente != null)
             {
                 return new ClienteDto
@@ -110,13 +140,12 @@ namespace Tienda.API.Services.Venta
                     ClienteID = cliente.ClienteID,
                     NombreRazonSocial = cliente.NombreRazonSocial,
                     NumeroDocumento = cliente.NumeroDocumento,
-                    TipoDocumento = cliente.TipoDocumento,
+                    TipoDocumentoCode = cliente.TipoDocumento,
                     Email = cliente.Email,
                     Telefono = cliente.Telefono
                 };
             }
 
-            // 🆕 si no existe, lo creamos
             var nuevo = new Models.Cliente
             {
                 NombreRazonSocial = nombre,
@@ -133,7 +162,7 @@ namespace Tienda.API.Services.Venta
                 ClienteID = nuevo.ClienteID,
                 NombreRazonSocial = nuevo.NombreRazonSocial,
                 NumeroDocumento = nuevo.NumeroDocumento,
-                TipoDocumento = nuevo.TipoDocumento,
+                TipoDocumentoCode = nuevo.TipoDocumento,
                 Email = null,
                 Telefono = null
             };
@@ -160,6 +189,53 @@ namespace Tienda.API.Services.Venta
                     Total = v.Total,
                     EsCredito = v.EsCredito,
                     FechaRegistro = v.FechaRegistro,
+                    EsEfectivo = v.EsEfectivo,
+                    MontoEfectivo = v.MontoEfectivo,
+                    EsDigital = v.EsDigital,
+                    MontoDigital = v.MontoDigital,
+                    Detalles = v.Detalles.Select(d => new DetalleVentaDto
+                    {
+                        ProductoID = d.ProductoID,
+                        NombreProducto = d.Producto != null ? d.Producto.Nombre : "Sin Nombre",
+                        Cantidad = d.Cantidad,
+                        PrecioUnitario = d.PrecioUnitario,
+                        Subtotal = d.Subtotal
+                    }).ToList()
+                })
+                .OrderByDescending(v => v.FechaRegistro)
+                .ToListAsync();
+        }
+        public async Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime fecha, int? productoId = null)
+        {
+            var fechaInicio = fecha.Date;
+            var fechaFin = fecha.Date.AddDays(1);
+
+            var query = _context.Ventas
+                .Include(v => v.Cliente)
+                .Include(v => v.Detalles)
+                    .ThenInclude(d => d.Producto)
+                .Where(v => v.FechaRegistro >= fechaInicio && v.FechaRegistro < fechaFin);
+
+            if (productoId.HasValue && productoId.Value > 0)
+            {
+                query = query.Where(v => v.Detalles.Any(d => d.ProductoID == productoId.Value));
+            }
+
+            return await query
+                .Select(v => new VentaDto
+                {
+                    VentaID = v.VentaID,
+                    ClienteID = v.ClienteID,
+                    ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Sin Cliente",
+                    TipoComprobante = v.TipoComprobante,
+                    NumeroComprobante = v.NumeroComprobante ?? "",
+                    Total = v.Total,
+                    EsCredito = v.EsCredito,
+                    FechaRegistro = v.FechaRegistro,
+                    EsEfectivo = v.EsEfectivo,
+                    MontoEfectivo = v.MontoEfectivo,
+                    EsDigital = v.EsDigital,
+                    MontoDigital = v.MontoDigital,
                     Detalles = v.Detalles.Select(d => new DetalleVentaDto
                     {
                         ProductoID = d.ProductoID,

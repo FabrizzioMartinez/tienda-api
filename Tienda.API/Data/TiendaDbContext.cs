@@ -8,13 +8,12 @@ namespace Tienda.API.Data
     {
         public TiendaDbContext(DbContextOptions<TiendaDbContext> options) : base(options) { }
 
-        // Entidades Maestras
         public DbSet<Producto> Productos { get; set; }
         public DbSet<Marca> Marcas { get; set; }
         public DbSet<TipoProducto> TiposProducto { get; set; }
         public DbSet<UnidadMedida> UnidadesMedida { get; set; }
-
-        // Entidades de Venta
+        public DbSet<MaestroTabla> Maestros { get; set; }
+        public DbSet<MaestroTablaDetalle> MaestroDetalles { get; set; }
         public DbSet<Cliente> Clientes { get; set; }
         public DbSet<Venta> Ventas { get; set; }
         public DbSet<DetalleVenta> DetalleVentas { get; set; }
@@ -24,7 +23,32 @@ namespace Tienda.API.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // 🏷️ MAPEO MARCAS
+            modelBuilder.Entity<MaestroTabla>(entity => {
+                entity.ToTable("MaestroTabla");
+                entity.HasKey(e => e.MaestroTablaID);
+                entity.Property(e => e.MaestroTablaID).HasColumnName("MaestroTablaID");
+                entity.Property(e => e.Codigo).HasColumnName("Codigo");
+                entity.Property(e => e.Descripcion).HasColumnName("Descripcion");
+                entity.Property(e => e.Activo).HasColumnName("Activo");
+            });
+
+            modelBuilder.Entity<MaestroTablaDetalle>(entity => {
+                entity.ToTable("MaestroTablaDetalle");
+                entity.HasKey(e => e.MaestroTablaDetalleID);
+                entity.HasAlternateKey(e => e.Valor);
+                entity.Property(e => e.MaestroTablaDetalleID).HasColumnName("MaestroTablaDetalleID");
+                entity.Property(e => e.MaestroTablaID).HasColumnName("MaestroTablaID");
+                entity.Property(e => e.Code).HasColumnName("Code");
+                entity.Property(e => e.Valor).HasColumnName("Valor");
+                entity.Property(e => e.Texto).HasColumnName("Texto");
+                entity.Property(e => e.Activo).HasColumnName("Activo");
+
+                entity.HasOne(d => d.MaestroTabla)
+                      .WithMany(m => m.Detalles)
+                      .HasForeignKey(d => d.MaestroTablaID)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<Marca>(entity => {
                 entity.ToTable("marcas");
                 entity.HasKey(e => e.MarcaID);
@@ -33,7 +57,6 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Activo).HasColumnName("activo");
             });
 
-            // ⚙️ MAPEO TIPOS PRODUCTO
             modelBuilder.Entity<TipoProducto>(entity => {
                 entity.ToTable("tiposproducto");
                 entity.HasKey(e => e.TipoProductoID);
@@ -42,7 +65,6 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Activo).HasColumnName("activo");
             });
 
-            // ⚖️ MAPEO UNIDADES MEDIDA
             modelBuilder.Entity<UnidadMedida>(entity => {
                 entity.ToTable("unidadesmedida");
                 entity.HasKey(e => e.UnidadMedidaID);
@@ -52,20 +74,14 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Activo).HasColumnName("activo");
             });
 
-            // 📦 MAPEO PRODUCTOS
             modelBuilder.Entity<Producto>(entity => {
                 entity.ToTable("productos");
                 entity.HasKey(e => e.ProductoID);
-
-                // Mapeos obligatorios para evitar el error 42703
                 entity.Property(e => e.ProductoID).HasColumnName("productoid");
                 entity.Property(e => e.Nombre).HasColumnName("nombre");
                 entity.Property(e => e.Precio).HasColumnName("precio");
-
-                // AQUÍ ESTÁ LA SOLUCIÓN A TU ERROR:
                 entity.Property(e => e.Stock).HasColumnName("stock");
                 entity.Property(e => e.StockMinimo).HasColumnName("stockminimo");
-
                 entity.Property(e => e.Descripcion).HasColumnName("descripcion");
                 entity.Property(e => e.CategoriaID).HasColumnName("categoriaid");
                 entity.Property(e => e.CodigoBarras).HasColumnName("codigobarras");
@@ -78,7 +94,6 @@ namespace Tienda.API.Data
                 entity.Property(e => e.ValorVolumen).HasColumnName("valorvolumen");
             });
 
-            // 👤 MAPEO CLIENTES
             modelBuilder.Entity<Cliente>(entity => {
                 entity.ToTable("clientes");
                 entity.HasKey(e => e.ClienteID);
@@ -89,9 +104,14 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Telefono).HasColumnName("telefono");
                 entity.Property(e => e.Email).HasColumnName("email");
                 entity.Property(e => e.Activo).HasColumnName("activo");
+
+                entity.HasOne(c => c.MaestroTablaDetalle)
+                      .WithMany()
+                      .HasForeignKey(c => c.TipoDocumento)
+                      .HasPrincipalKey(d => d.Valor)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // 🛒 MAPEO VENTAS
             modelBuilder.Entity<Venta>(entity => {
                 entity.ToTable("ventas");
                 entity.HasKey(e => e.VentaID);
@@ -102,10 +122,15 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Total).HasColumnName("total");
                 entity.Property(e => e.EsCredito).HasColumnName("escredito");
                 entity.Property(e => e.FechaRegistro).HasColumnName("fecharegistro");
+
+                entity.Property(e => e.EsEfectivo).HasColumnName("esefectivo");
+                entity.Property(e => e.MontoEfectivo).HasColumnName("montoefectivo");
+                entity.Property(e => e.EsDigital).HasColumnName("esdigital");
+                entity.Property(e => e.MontoDigital).HasColumnName("montodigital");
+
                 entity.HasOne(v => v.Cliente).WithMany().HasForeignKey(v => v.ClienteID);
             });
 
-            // 📝 MAPEO DETALLE VENTAS
             modelBuilder.Entity<DetalleVenta>(entity => {
                 entity.ToTable("detalleventas");
                 entity.HasKey(e => e.DetalleVentaID);
@@ -117,14 +142,10 @@ namespace Tienda.API.Data
                 entity.Property(e => e.Subtotal).HasColumnName("subtotal");
                 entity.Property(e => e.FechaRegistro).HasColumnName("fecharegistro");
 
-                // Relación con Venta
                 entity.HasOne(d => d.Venta).WithMany(v => v.Detalles).HasForeignKey(d => d.VentaID);
-
-                // Relación explícita con Producto (Crucial para el .ThenInclude en tus consultas)
                 entity.HasOne(d => d.Producto).WithMany().HasForeignKey(d => d.ProductoID);
             });
 
-            // 💳 MAPEO CUENTAS POR COBRAR
             modelBuilder.Entity<CuentaPorCobrar>(entity => {
                 entity.ToTable("cuentasporcobrar");
                 entity.HasKey(e => e.CuentaCobrarID);

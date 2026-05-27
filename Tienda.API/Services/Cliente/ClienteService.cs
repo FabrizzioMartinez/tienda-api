@@ -18,46 +18,83 @@ namespace Tienda.API.Services.Cliente
 
         public async Task<IEnumerable<ClienteDto>> ObtenerTodosAsync()
         {
-            return await _context.Clientes
-                .Where(c => c.Activo)
-                .Select(c => new ClienteDto
-                {
-                    ClienteID = c.ClienteID,
-                    NombreRazonSocial = c.NombreRazonSocial,
-                    NumeroDocumento = c.NumeroDocumento,
-                    TipoDocumento = c.TipoDocumento,
-                    Email = c.Email,
-                    Telefono = c.Telefono
-                })
-                .ToListAsync();
+            try
+            {
+                return await _context.Clientes
+                    .Include(c => c.MaestroTablaDetalle)
+                    .Where(c => c.Activo && !(c.NombreRazonSocial.ToLower() == "admin" && c.NumeroDocumento == "00000000"))
+                    .Select(c => new ClienteDto
+                    {
+                        ClienteID = c.ClienteID,
+                        NombreRazonSocial = c.NombreRazonSocial != null ? c.NombreRazonSocial.ToUpper() : string.Empty,
+                        NumeroDocumento = c.NumeroDocumento,
+
+                        // 🚀 Asignamos el valor de la BD al nuevo nombre del DTO
+                        TipoDocumentoCode = c.TipoDocumento,
+                        TipoDocumentoTexto = (c.MaestroTablaDetalle.Texto ?? c.TipoDocumento).ToUpper(),
+
+                        Email = c.Email != null ? c.Email.ToUpper() : string.Empty,
+                        Telefono = c.Telefono
+                    })
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error en ObtenerTodosAsync]: {ex.Message}");
+                throw;
+            }
         }
 
-        public async Task<ApiResponse<ClienteDto>> RegistrarAsync(ClienteDto dto)
+        public async Task<ApiResponse<ClienteDto>> RegistrarOEditarAsync(ClienteDto dto)
         {
-            var existe = await _context.Clientes
-                .AnyAsync(c => c.NumeroDocumento == dto.NumeroDocumento);
+            bool esEdicion = dto.ClienteID > 0;
+            var existeDuplicado = await _context.Clientes
+                .AnyAsync(c => c.NumeroDocumento == dto.NumeroDocumento && (!esEdicion || c.ClienteID != dto.ClienteID));
 
-            if (existe)
+            if (existeDuplicado)
             {
-                return new ApiResponse<ClienteDto>("El cliente ya está registrado");
+                return new ApiResponse<ClienteDto>("Ya existe un cliente con el mismo número de documento");
             }
 
-            var cliente = new Models.Cliente
+            Models.Cliente? cliente;
+
+            if (esEdicion)
             {
-                NombreRazonSocial = dto.NombreRazonSocial,
-                NumeroDocumento = dto.NumeroDocumento,
-                TipoDocumento = dto.TipoDocumento,
-                Email = dto.Email,
-                Telefono = dto.Telefono,
-                Activo = true
-            };
+                cliente = await _context.Clientes.FindAsync(dto.ClienteID);
+                if (cliente == null)
+                {
+                    return new ApiResponse<ClienteDto>("El cliente a editar no existe");
+                }
+                cliente.NombreRazonSocial = dto.NombreRazonSocial ?? string.Empty;
+                cliente.NumeroDocumento = dto.NumeroDocumento ?? string.Empty;
+                cliente.TipoDocumento = dto.TipoDocumentoCode ?? string.Empty;
+                cliente.Email = dto.Email;
+                cliente.Telefono = dto.Telefono;
 
-            _context.Clientes.Add(cliente);
+                _context.Clientes.Update(cliente);
+            }
+            else
+            {
+                cliente = new Models.Cliente
+                {
+                    NombreRazonSocial = dto.NombreRazonSocial ?? string.Empty,
+                    NumeroDocumento = dto.NumeroDocumento ?? string.Empty,
+                    TipoDocumento = dto.TipoDocumentoCode ?? string.Empty,
+                    Email = dto.Email,
+                    Telefono = dto.Telefono,
+                    Activo = true
+                };
+
+                _context.Clientes.Add(cliente);
+            }
             await _context.SaveChangesAsync();
+            if (!esEdicion)
+            {
+                dto.ClienteID = cliente.ClienteID;
+            }
 
-            dto.ClienteID = cliente.ClienteID;
-
-            return new ApiResponse<ClienteDto>(dto, "Cliente registrado correctamente");
+            string mensajeExito = esEdicion ? "Cliente actualizado correctamente" : "Cliente registrado correctamente";
+            return new ApiResponse<ClienteDto>(dto, mensajeExito);
         }
     }
 }

@@ -8,5 +8,6 @@ namespace Tienda.API.Interfaces.Venta
         Task<bool> RegistrarVentaAsync(VentaCreateDto ventaDto);
         Task<ClienteDto> ObtenerOCrearClienteAsync(string nombre, string numeroDocumento, string tipoDocumento);
         Task<List<VentaDto>> ObtenerVentasPorFechaAsync(DateTime fecha);
+        Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime fecha, int? productoId = null);
     }
 }

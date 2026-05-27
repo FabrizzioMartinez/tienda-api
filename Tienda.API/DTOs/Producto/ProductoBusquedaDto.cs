@@ -8,6 +8,7 @@
             public string? Nombre { get; set; }
             public decimal Precio { get; set; }
             public int? Stock { get; set; }
+            public string? Tamaño { get; set; }
             // Solo incluimos lo que el usuario necesita ver en la lista de resultados
         }
     }

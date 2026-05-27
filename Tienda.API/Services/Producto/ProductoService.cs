@@ -68,7 +68,8 @@ namespace Tienda.API.Services
                     ProductoID = p.ProductoID,
                     Nombre = p.Nombre,
                     Precio = p.Precio,
-                    Stock = p.Stock
+                    Stock = p.Stock,
+                    Tamaño =p.UnidadMedida.Abreviatura
                 })
                 .Take(10)
                 .ToListAsync();

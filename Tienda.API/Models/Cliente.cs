@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Tienda.API.Models
 {
@@ -16,8 +17,8 @@ namespace Tienda.API.Models
         public string NumeroDocumento { get; set; } = string.Empty;
 
         [Required]
-        [MaxLength(10)]
-        public string TipoDocumento { get; set; } = string.Empty; // DNI, RUC
+        [MaxLength(20)]
+        public string TipoDocumento { get; set; } = string.Empty; // 👈 SE QUEDA COMO STRING ('01', '06' o 'DNI')
 
         [MaxLength(100)]
         public string? Email { get; set; }
@@ -26,5 +27,8 @@ namespace Tienda.API.Models
         public string? Telefono { get; set; }
 
         public bool Activo { get; set; } = true;
+
+        // Propiedad de navegación por texto
+        public virtual MaestroTablaDetalle? MaestroTablaDetalle { get; set; }
     }
 }

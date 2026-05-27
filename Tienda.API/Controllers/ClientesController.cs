@@ -26,10 +26,15 @@ namespace Tienda.API.Controllers
 
         // POST: api/clientes/registrar
         [HttpPost("registrar")]
-        [HttpPost]
-        public async Task<IActionResult> Registrar(ClienteDto dto)
+        public async Task<IActionResult> Guardar(ClienteDto dto)
         {
-            var response = await _clienteService.RegistrarAsync(dto);
+
+            var response = await _clienteService.RegistrarOEditarAsync(dto);
+            if (!response.Success)
+            {
+                return BadRequest(response);
+            }
+
             return Ok(response);
         }
     }

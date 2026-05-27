@@ -57,5 +57,20 @@ namespace Tienda.API.Controllers
                 return StatusCode(500, $"Error al obtener las ventas: {ex.Message}");
             }
         }
+        [HttpGet("filtrar")]
+        public async Task<IActionResult> GetVentasFiltro([FromQuery] DateTime fecha, [FromQuery] int? productoId = null)
+        {
+            try
+            {
+                var ventas = await _ventaService.ObtenerVentasFiltroAsync(fecha, productoId);
+
+                return Ok(new { data = ventas });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error al obtener las ventas: {ex.Message}");
+            }
+        }
+
     }
 }

@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Tienda.API.Models
@@ -29,7 +31,16 @@ namespace Tienda.API.Models
 
         public DateTime FechaRegistro { get; set; } = DateTime.Now;
 
-        // Relación: Una venta tiene muchos detalles
+        public bool EsEfectivo { get; set; } = false;
+
+        [Column(TypeName = "decimal(12,2)")]
+        public decimal MontoEfectivo { get; set; } = 0.00m;
+
+        public bool EsDigital { get; set; } = false;
+
+        [Column(TypeName = "decimal(12,2)")]
+        public decimal MontoDigital { get; set; } = 0.00m;
+
         public List<DetalleVenta> Detalles { get; set; } = new List<DetalleVenta>();
     }
 }
