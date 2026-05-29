@@ -205,48 +205,52 @@ namespace Tienda.API.Services.Venta
                 .OrderByDescending(v => v.FechaRegistro)
                 .ToListAsync();
         }
-        public async Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime fecha, int? productoId = null)
-        {
-            var fechaInicio = fecha.Date;
-            var fechaFin = fecha.Date.AddDays(1);
 
-            var query = _context.Ventas
+        public async Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime fecha, int? productoId)
+        {
+
+            var fechaInicio = fecha.Date;
+            var fechaFin = fechaInicio.AddDays(1);
+
+            var ventas = await _context.Ventas
+                .AsNoTracking()
                 .Include(v => v.Cliente)
                 .Include(v => v.Detalles)
                     .ThenInclude(d => d.Producto)
-                .Where(v => v.FechaRegistro >= fechaInicio && v.FechaRegistro < fechaFin);
+                .Where(v => v.FechaRegistro >= fechaInicio && v.FechaRegistro < fechaFin)
+                .ToListAsync();
+
 
             if (productoId.HasValue && productoId.Value > 0)
             {
-                query = query.Where(v => v.Detalles.Any(d => d.ProductoID == productoId.Value));
+                ventas = ventas
+                    .Where(v => v.Detalles != null && v.Detalles.Any(d => d.ProductoID == productoId.Value))
+                    .ToList();
             }
 
-            return await query
-                .Select(v => new VentaDto
-                {
-                    VentaID = v.VentaID,
-                    ClienteID = v.ClienteID,
-                    ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Sin Cliente",
-                    TipoComprobante = v.TipoComprobante,
-                    NumeroComprobante = v.NumeroComprobante ?? "",
-                    Total = v.Total,
-                    EsCredito = v.EsCredito,
-                    FechaRegistro = v.FechaRegistro,
-                    EsEfectivo = v.EsEfectivo,
-                    MontoEfectivo = v.MontoEfectivo,
-                    EsDigital = v.EsDigital,
-                    MontoDigital = v.MontoDigital,
-                    Detalles = v.Detalles.Select(d => new DetalleVentaDto
+            return ventas.Select(v => new VentaDto
+            {
+                VentaID = v.VentaID,
+                TipoComprobante = v.TipoComprobante,
+                NumeroComprobante = v.NumeroComprobante,
+                ClienteID = v.ClienteID,
+                ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Cliente Anónimo",
+                FechaRegistro = v.FechaRegistro,
+                Total = v.Total,
+                EsEfectivo = v.EsEfectivo,
+                EsDigital = v.EsDigital,
+                EsCredito = v.EsCredito,
+
+                Detalles = v.Detalles != null
+                    ? v.Detalles.Select(d => new DetalleVentaDto
                     {
-                        ProductoID = d.ProductoID,
-                        NombreProducto = d.Producto != null ? d.Producto.Nombre : "Sin Nombre",
+                        NombreProducto = d.Producto != null ? d.Producto.Nombre : "Producto No Registrado",
                         Cantidad = d.Cantidad,
                         PrecioUnitario = d.PrecioUnitario,
                         Subtotal = d.Subtotal
                     }).ToList()
-                })
-                .OrderByDescending(v => v.FechaRegistro)
-                .ToListAsync();
+                    : new List<DetalleVentaDto>()
+            }).ToList();
         }
     }
 }
