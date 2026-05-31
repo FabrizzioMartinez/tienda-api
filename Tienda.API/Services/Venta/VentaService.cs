@@ -23,7 +23,6 @@ namespace Tienda.API.Services.Venta
             if (dto.Total <= 0)
                 return false;
 
-            // Evaluamos los montos de entrada de forma segura
             decimal montoEfectivoEval = dto.MontoEfectivo ?? 0.00m;
             decimal montoDigitalEval = dto.MontoDigital ?? 0.00m;
 
@@ -39,7 +38,9 @@ namespace Tienda.API.Services.Venta
 
             try
             {
-                var nowUtc = DateTime.UtcNow;
+                var zonaPeru = TimeZoneInfo.FindSystemTimeZoneById("America/Lima");
+                DateTime horaPeruRaw = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zonaPeru);
+                DateTime fechaPeruLimpia = DateTime.SpecifyKind(horaPeruRaw, DateTimeKind.Unspecified);
 
                 var cliente = await ObtenerOCrearClienteAsync(dto.ClienteNombre, dto.NumeroComprobante, dto.TipoDocumento);
 
@@ -51,11 +52,9 @@ namespace Tienda.API.Services.Venta
                     ClienteID = cliente.ClienteID,
                     TipoComprobante = dto.TipoComprobante,
                     NumeroComprobante = dto.NumeroComprobante,
-                    // 🚀 El total de la venta se calcula dinámicamente según los métodos de pago (Efectivo + Digital)
-                    // Si es crédito, toma el total enviado; de lo contrario, suma ambos montos pagados.
                     Total = dto.EsCredito ? dto.Total : (montoEfectivoEval + montoDigitalEval),
                     EsCredito = dto.EsCredito,
-                    FechaRegistro = nowUtc,
+                    FechaRegistro = fechaPeruLimpia,
                     EsEfectivo = dto.EsEfectivo,
                     MontoEfectivo = montoEfectivoEval,
                     EsDigital = dto.EsDigital,
@@ -71,14 +70,12 @@ namespace Tienda.API.Services.Venta
 
                     if (producto == null)
                     {
-                        Console.WriteLine($"[Error Stock]: El producto con ID {item.ProductoID} no existe.");
                         await transaction.RollbackAsync();
                         return false;
                     }
 
                     if (producto.Stock < item.Cantidad)
                     {
-                        Console.WriteLine($"[Error Stock]: Stock insuficiente para {producto.Nombre}. Disponible: {producto.Stock}, Solicitado: {item.Cantidad}");
                         await transaction.RollbackAsync();
                         return false;
                     }
@@ -92,7 +89,7 @@ namespace Tienda.API.Services.Venta
                         Cantidad = item.Cantidad,
                         PrecioUnitario = item.PrecioUnitario,
                         Subtotal = item.Subtotal,
-                        FechaRegistro = nowUtc
+                        FechaRegistro = fechaPeruLimpia
                     };
 
                     _context.DetalleVentas.Add(detalle);
@@ -108,7 +105,7 @@ namespace Tienda.API.Services.Venta
                         MontoTotal = dto.Total,
                         SaldoPendiente = dto.Total,
                         Detalle = "Venta a crédito inicial",
-                        FechaRegistro = nowUtc,
+                        FechaRegistro = fechaPeruLimpia,
                         Estado = "PENDIENTE"
                     };
 
@@ -119,9 +116,8 @@ namespace Tienda.API.Services.Venta
                 await transaction.CommitAsync();
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"[Error al registrar venta]: {ex.Message}");
                 await transaction.RollbackAsync();
                 return false;
             }
