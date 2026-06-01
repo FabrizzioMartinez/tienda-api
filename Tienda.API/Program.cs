@@ -13,6 +13,7 @@ using Tienda.API.Services.MaestroTabla;   // 👈 Agregado para Docker
 using Npgsql;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Configuración de Base de Datos
@@ -29,19 +30,22 @@ builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<IMaestroService, MaestroService>(); // 👈 Ya no dará error CS0246
 
-// 3. Configuración de CORS - Agregamos todas las variantes posibles
+// 3. Configuración de CORS - Agregamos la URL actual que reportaba el bloqueo
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PermitirAngular", policy =>
     {
         policy.WithOrigins(
-            "http://localhost:4200", 
-            "https://tienda-front-khaki.vercel.app", // Tu dominio actual
-            "https://tienda-front.vercel.app",       // Posible dominio principal
-            "https://tienda-front-5d8p9j12g-fabrizziomartinezs-projects.vercel.app" // Tu URL larga
+            "http://localhost:4200",
+            "https://tienda-front-khaki.vercel.app",
+            "https://tienda-front.vercel.app",
+            "https://tienda-front-5d8p9j12g-fabrizziomartinezs-projects.vercel.app",
+            // 🔥 URL de producción actual agregada para solucionar el bloqueo de CORS:
+            "https://tienda-front-bb0dfwnfq-fabrizziomartinezs-projects.vercel.app"
         )
         .AllowAnyHeader()
-        .AllowAnyMethod();
+        .AllowAnyMethod()
+        .AllowCredentials(); // Habilita compatibilidad completa con cabeceras HTTP de Angular
     });
 });
 
@@ -56,7 +60,7 @@ builder.Services.AddControllers()
 var app = builder.Build();
 
 // 5. Middlewares
-app.UseCors("PermitirAngular"); // <-- Crucial: debe estar antes de MapControllers
+app.UseCors("PermitirAngular"); // <-- Crucial: debe estar antes de MapControllers e Inyección de Redirecciones
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
