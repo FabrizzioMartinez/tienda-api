@@ -58,7 +58,7 @@ namespace Tienda.API.Controllers
             }
         }
         [HttpGet("filtrar")]
-        public async Task<IActionResult> GetVentasFiltro([FromQuery] DateTime fecha, [FromQuery] int? productoId = null)
+        public async Task<IActionResult> GetVentasFiltro([FromQuery] DateTime? fecha = null, [FromQuery] int? productoId = null)
         {
             try
             {
