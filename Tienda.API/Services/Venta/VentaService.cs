@@ -369,5 +369,36 @@ namespace Tienda.API.Services.Venta
                 return false;
             }
         }
+        public async Task<VentaDto?> ObtenerVentaPorIdAsync(int ventaId)
+        {
+            return await _context.Ventas
+                .AsNoTracking() // 🚀 Lectura limpia y rápida sin persistencia en memoria
+                .Where(v => v.VentaID == ventaId)
+                .Select(v => new VentaDto
+                {
+                    VentaID = v.VentaID,
+                    ClienteID = v.ClienteID,
+                    ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Sin Cliente",
+                    TipoComprobante = v.TipoComprobante,
+                    NumeroComprobante = v.NumeroComprobante ?? "",
+                    Total = v.Total,
+                    EsCredito = v.EsCredito,
+                    FechaRegistro = v.FechaRegistro,
+                    EsEfectivo = v.EsEfectivo,
+                    MontoEfectivo = v.MontoEfectivo,
+                    EsDigital = v.EsDigital,
+                    MontoDigital = v.MontoDigital,
+                    Detalles = v.Detalles.Select(d => new DetalleVentaDto
+                    {
+                        ProductoID = d.ProductoID,
+                        NombreProducto = d.Producto != null ? d.Producto.Nombre : "Sin Nombre",
+                        Cantidad = d.Cantidad,
+                        PrecioUnitario = d.PrecioUnitario,
+                        Subtotal = d.Subtotal
+                    }).ToList()
+                })
+                .FirstOrDefaultAsync(); // Devuelve la venta o null si el ID no existe
+        }
+
     }
 }

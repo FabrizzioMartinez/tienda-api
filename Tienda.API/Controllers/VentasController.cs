@@ -83,5 +83,37 @@ namespace Tienda.API.Controllers
             return Ok(new { mensaje = "Venta anulada con éxito y stock restaurado." });
         }
 
+        [HttpGet("{id}")]
+        public async Task<IActionResult> ObtenerPorId(int id)
+        {
+            try
+            {
+                // 🔍 Validamos que el ID enviado sea un entero operativo
+                if (id <= 0)
+                {
+                    return BadRequest(new { mensaje = "El ID de la venta debe ser mayor a cero." });
+                }
+
+                // 🚀 Invocamos la función quirúrgica de tu repositorio / servicio
+                var ventaDto = await _ventaService.ObtenerVentaPorIdAsync(id);
+
+                // 🛑 Si el ID no existe en la base de datos, respondemos con un 404 estructurado
+                if (ventaDto == null)
+                {
+                    return NotFound(new { mensaje = $"No se encontró ninguna venta registrada con el ID {id}." });
+                }
+
+                // 🎯 Retorno exitoso acoplado perfectamente con tus mapeos de Angular
+                return Ok(new { data = ventaDto });
+            }
+            catch (Exception ex)
+            {
+                // 🚨 Control de excepciones globales para evitar caídas de hilo en IIS
+                // Reemplaza Console por tu Logger de confianza (ILogger<VentasController>) si lo tienes inyectado
+                Console.WriteLine($"❌ Error interno en ObtenerPorId: {ex.Message}");
+                return StatusCode(500, new { mensaje = "Ocurrió un error interno en el servidor al recuperar la venta.", detalle = ex.Message });
+            }
+        }
+
     }
 }

@@ -10,5 +10,6 @@ namespace Tienda.API.Interfaces.Venta
         Task<List<VentaDto>> ObtenerVentasPorFechaAsync(DateTime fecha);
         Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime? fecha, DateTime? fechaHasta, int? productoId);
         Task<bool> AnularVentaAsync(int ventaId);
+        Task<VentaDto?> ObtenerVentaPorIdAsync(int ventaId);
     }
 }
