@@ -13,8 +13,9 @@ namespace Tienda.API.Interfaces
     public interface IProductoService
     {
         Task<List<ProductoDto>> GetProductosAsync();
-        Task<Producto?> GetProductoByIdAsync(int id);
+        Task<ProductoDto?> GetProductoByIdAsync(int id);
         Task<Producto> UpsertProductoAsync(Producto producto);
         Task<List<ProductoBusquedaDto>> SearchProductosAsync(string query);
+        Task<bool> ActualizarStockAsync(int productoId, int nuevoStock);
     }
 }

@@ -34,8 +34,30 @@ namespace Tienda.API.Services
                 })
                 .ToListAsync();
         }
-        public async Task<Producto?> GetProductoByIdAsync(int id) =>
-            await _context.Productos.FindAsync(id);
+        public async Task<ProductoDto?> GetProductoByIdAsync(int id)
+        {
+            return await _context.Productos
+                .Where(p => p.ProductoID == id)
+                .Select(p => new ProductoDto
+                {
+                    ProductoID = p.ProductoID,
+                    Nombre = p.Nombre,
+                    Precio = p.Precio,
+                    Stock = p.Stock,
+                    StockMinimo = p.StockMinimo,
+                    NombreMarca = p.Marca.Nombre,
+                    NombreTipo = p.TipoProducto.Nombre,
+                    TipoProducto = p.TipoProducto.Nombre,
+                    UnidadMedida = p.UnidadMedida.Nombre,
+                    Abreviatura = p.UnidadMedida.Abreviatura,
+
+                    // 🌟 CRÍTICO: Envía las llaves foráneas numéricas al Frontend
+                    MarcaID = p.MarcaID,
+                    TipoProductoID = p.TipoProductoID,
+                    UnidadMedidaID = p.UnidadMedidaID
+                })
+                .FirstOrDefaultAsync();
+        }
         public async Task<Producto> UpsertProductoAsync(Producto producto)
         {
             producto.FechaModificacion = DateTime.UtcNow;
@@ -73,6 +95,16 @@ namespace Tienda.API.Services
                 })
                 .Take(10)
                 .ToListAsync();
+        }
+
+        public async Task<bool> ActualizarStockAsync(int productoId, int nuevoStock)
+        {
+            var producto = new Producto { ProductoID = productoId };
+            _context.Productos.Attach(producto);
+            producto.Stock = nuevoStock;
+            _context.Entry(producto).Property(p => p.Stock).IsModified = true;
+            var filasAfectadas = await _context.SaveChangesAsync();
+            return filasAfectadas > 0;
         }
     }
 }

@@ -17,6 +17,7 @@ namespace Tienda.API.Services.Venta
 
         public async Task<bool> RegistrarVentaAsync(VentaCreateDto dto)
         {
+            // 1. Validaciones rápidas de contrato (Fail-Fast)
             if (dto.Detalles == null || !dto.Detalles.Any())
                 return false;
 
@@ -34,6 +35,7 @@ namespace Tienda.API.Services.Venta
                 }
             }
 
+            // Iniciamos la transacción atómica para proteger el stock y los correlativos
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
@@ -42,16 +44,78 @@ namespace Tienda.API.Services.Venta
                 DateTime horaPeruRaw = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zonaPeru);
                 DateTime fechaPeruLimpia = DateTime.SpecifyKind(horaPeruRaw, DateTimeKind.Unspecified);
 
-                var cliente = await ObtenerOCrearClienteAsync(dto.ClienteNombre, dto.NumeroComprobante, dto.TipoDocumento);
+                // =========================================================================
+                // 🔄 GENERACIÓN AUTOMÁTICA DEL CORRELATIVO CON PREFIJO (FC / BV)
+                // =========================================================================
+                string numeroComprobanteFinal = dto.NumeroComprobante;
+
+                if (string.IsNullOrWhiteSpace(numeroComprobanteFinal) || numeroComprobanteFinal == "00000000")
+                {
+                    // Determinar el prefijo según el tipo de comprobante recibido (Ignora mayúsculas/minúsculas)
+                    string prefijo = "NV"; // 'NV' (Nota de Venta) por defecto si no es ninguno
+                    string tipoCompUpper = dto.TipoComprobante?.ToUpper() ?? "";
+
+                    if (tipoCompUpper.Contains("FACTURA") || tipoCompUpper == "FAC" || tipoCompUpper == "01")
+                    {
+                        prefijo = "FC";
+                    }
+                    else if (tipoCompUpper.Contains("BOLETA") || tipoCompUpper == "BOL" || tipoCompUpper == "03")
+                    {
+                        prefijo = "BV";
+                    }
+
+                    // Buscar la última venta registrada de ese mismo tipo que ya tenga el prefijo
+                    var ultimaVenta = await _context.Ventas
+                        .Where(v => v.TipoComprobante == dto.TipoComprobante &&
+                                    v.NumeroComprobante != "00000000" &&
+                                    v.NumeroComprobante.StartsWith(prefijo))
+                        .OrderByDescending(v => v.VentaID)
+                        .FirstOrDefaultAsync();
+
+                    int siguienteCorrelativo = 1;
+
+                    if (ultimaVenta != null && !string.IsNullOrWhiteSpace(ultimaVenta.NumeroComprobante))
+                    {
+                        // Extraemos el número quitando las dos letras iniciales (FC o BV)
+                        string numeroLimpio = ultimaVenta.NumeroComprobante.Substring(2);
+
+                        if (int.TryParse(numeroLimpio, out int ultimoNumero))
+                        {
+                            siguienteCorrelativo = ultimoNumero + 1;
+                        }
+                    }
+
+                    // Formateamos a 8 dígitos numéricos pegados al prefijo (Ej: FC00000001, BV00000142)
+                    numeroComprobanteFinal = $"{prefijo}{siguienteCorrelativo.ToString("D8")}";
+                }
+
+                // Validación estricta anti-duplicados por si hay colisión de peticiones simultáneas
+                if (numeroComprobanteFinal != "00000000")
+                {
+                    bool existeComprobante = await _context.Ventas
+                        .AnyAsync(v => v.NumeroComprobante == numeroComprobanteFinal && v.TipoComprobante == dto.TipoComprobante);
+
+                    if (existeComprobante)
+                    {
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
+                }
+
+                // Obtener o crear el cliente usando el número de comprobante definitivo
+                var cliente = await ObtenerOCrearClienteAsync(dto.ClienteNombre, numeroComprobanteFinal, dto.TipoDocumento);
 
                 if (cliente == null || cliente.ClienteID <= 0)
+                {
+                    await transaction.RollbackAsync();
                     return false;
+                }
 
                 var venta = new Tienda.API.Models.Venta
                 {
                     ClienteID = cliente.ClienteID,
                     TipoComprobante = dto.TipoComprobante,
-                    NumeroComprobante = dto.NumeroComprobante,
+                    NumeroComprobante = numeroComprobanteFinal, // Guardamos la serie autogenerada
                     Total = dto.EsCredito ? dto.Total : (montoEfectivoEval + montoDigitalEval),
                     EsCredito = dto.EsCredito,
                     FechaRegistro = fechaPeruLimpia,
@@ -62,24 +126,26 @@ namespace Tienda.API.Services.Venta
                 };
 
                 _context.Ventas.Add(venta);
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(); // Guardamos para obtener el VentaID asignado
 
+                // Procesar los detalles de la venta y rebajar inventario
                 foreach (var item in dto.Detalles)
                 {
-                    var producto = await _context.Productos.FindAsync(item.ProductoID);
+                    var producto = await _context.Productos
+                        .FirstOrDefaultAsync(p => p.ProductoID == item.ProductoID);
 
                     if (producto == null)
                     {
                         await transaction.RollbackAsync();
                         return false;
                     }
-
                     if (producto.Stock < item.Cantidad)
                     {
                         await transaction.RollbackAsync();
                         return false;
                     }
 
+                    // Rebajamos el stock de forma segura
                     producto.Stock -= item.Cantidad;
 
                     var detalle = new Tienda.API.Models.DetalleVenta
@@ -97,6 +163,7 @@ namespace Tienda.API.Services.Venta
 
                 await _context.SaveChangesAsync();
 
+                // Si la venta se procesa bajo la modalidad de Crédito, creamos la deuda inicial
                 if (dto.EsCredito)
                 {
                     var cuenta = new CuentaPorCobrar
@@ -113,11 +180,13 @@ namespace Tienda.API.Services.Venta
                     await _context.SaveChangesAsync();
                 }
 
+                // Consolidamos definitivamente los cambios en la base de datos
                 await transaction.CommitAsync();
                 return true;
             }
             catch (Exception)
             {
+                // Ante cualquier error imprevisto de base de datos, limpiamos el estado
                 await transaction.RollbackAsync();
                 return false;
             }
@@ -171,6 +240,7 @@ namespace Tienda.API.Services.Venta
             var fechaFin = fecha.Date.AddDays(1);
 
             return await _context.Ventas
+                .AsNoTracking() // 🚀 Optimización de rendimiento para lecturas
                 .Include(v => v.Cliente)
                 .Include(v => v.Detalles)
                     .ThenInclude(d => d.Producto)
@@ -202,80 +272,102 @@ namespace Tienda.API.Services.Venta
                 .ToListAsync();
         }
 
-        public async Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime? fecha, int? productoId)
+        public async Task<List<VentaDto>> ObtenerVentasFiltroAsync(DateTime? fecha, DateTime? fechaHasta, int? productoId)
         {
             var query = _context.Ventas
                 .AsNoTracking()
-                .Include(v => v.Cliente)
-                .Include(v => v.Detalles)
-                    .ThenInclude(d => d.Producto)
                 .AsQueryable();
+            if (fecha.HasValue && fechaHasta.HasValue)
+            {
+                var fechaInicio = fecha.Value.Date;
+                var fechaFin = fechaHasta.Value.Date.AddDays(1);
 
-            if (fecha.HasValue)
+                query = query.Where(v => v.FechaRegistro >= fechaInicio && v.FechaRegistro < fechaFin);
+            }
+            else if (fecha.HasValue)
             {
                 var fechaInicio = fecha.Value.Date;
                 var fechaFin = fechaInicio.AddDays(1);
                 query = query.Where(v => v.FechaRegistro >= fechaInicio && v.FechaRegistro < fechaFin);
             }
-
             if (productoId.HasValue && productoId.Value > 0)
             {
                 query = query.Where(v => v.Detalles.Any(d => d.ProductoID == productoId.Value));
             }
-
-            var ventas = await query.ToListAsync();
-
-            return ventas.Select(v =>
-            {
-                List<DetalleVentaDto> detallesFinales;
-                decimal totalFinal;
-
-                if (productoId.HasValue && productoId.Value > 0)
+            return await query
+                .Select(v => new VentaDto
                 {
-                    detallesFinales = v.Detalles != null
-                        ? v.Detalles
-                            .Where(d => d.ProductoID == productoId.Value)
-                            .Select(d => new DetalleVentaDto
-                            {
-                                NombreProducto = d.Producto != null ? d.Producto.Nombre : "Producto No Registrado",
-                                Cantidad = d.Cantidad,
-                                PrecioUnitario = d.PrecioUnitario,
-                                Subtotal = d.Subtotal
-                            }).ToList()
-                        : new List<DetalleVentaDto>();
+                    VentaID = v.VentaID,
+                    TipoComprobante = v.TipoComprobante,
+                    NumeroComprobante = v.NumeroComprobante,
+                    ClienteID = v.ClienteID,
+                    ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Sin Cliente",
+                    FechaRegistro = v.FechaRegistro,
+                    EsEfectivo = v.EsEfectivo,
+                    EsDigital = v.EsDigital,
+                    EsCredito = v.EsCredito,
+                    Total = (productoId.HasValue && productoId.Value > 0)
+                        ? v.Detalles.Where(d => d.ProductoID == productoId.Value).Sum(d => d.Subtotal)
+                        : v.Total,
 
-                    totalFinal = detallesFinales.Sum(d => d.Subtotal);
-                }
-                else
-                {
-                    detallesFinales = v.Detalles != null
-                        ? v.Detalles.Select(d => new DetalleVentaDto
+                    Detalles = v.Detalles
+                        .Where(d => !productoId.HasValue || productoId.Value <= 0 || d.ProductoID == productoId.Value)
+                        .Select(d => new DetalleVentaDto
                         {
                             NombreProducto = d.Producto != null ? d.Producto.Nombre : "Producto No Registrado",
                             Cantidad = d.Cantidad,
                             PrecioUnitario = d.PrecioUnitario,
                             Subtotal = d.Subtotal
                         }).ToList()
-                        : new List<DetalleVentaDto>();
+                })
+                .ToListAsync();
+        }
 
-                    totalFinal = v.Total;
-                }
+        public async Task<bool> AnularVentaAsync(int ventaId)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
-                return new VentaDto
+            try
+            {
+                var venta = await _context.Ventas
+                    .Include(v => v.Detalles)
+                    .FirstOrDefaultAsync(v => v.VentaID == ventaId);
+
+                if (venta == null) return false;
+                foreach (var detalle in venta.Detalles)
                 {
-                    VentaID = v.VentaID,
-                    TipoComprobante = v.TipoComprobante,
-                    NumeroComprobante = v.NumeroComprobante,
-                    ClienteID = v.ClienteID,
-                    ClienteNombre = v.Cliente != null ? v.Cliente.NombreRazonSocial : "Cliente Anónimo",
-                    FechaRegistro = v.FechaRegistro,
-                    Total = totalFinal,
-                    EsEfectivo = v.EsEfectivo,
-                    EsDigital = v.EsDigital,
-                    EsCredito = v.EsCredito,
-                    Detalles = detallesFinales
-                };
-            }).ToList();
+                    var producto = await _context.Productos
+                        .FirstOrDefaultAsync(p => p.ProductoID == detalle.ProductoID);
+
+                    if (producto != null)
+                    {
+                        producto.Stock += detalle.Cantidad;
+                    }
+                }
+                if (venta.EsCredito)
+                {
+                    var cuenta = await _context.CuentasPorCobrar
+                        .FirstOrDefaultAsync(c => c.VentaID == venta.VentaID);
+
+                    if (cuenta != null)
+                    {
+                        cuenta.Estado = "ANULADO";
+                        cuenta.SaldoPendiente = 0;
+                        cuenta.Detalle += " (Venta Anulada)";
+                    }
+                }
+                _context.Ventas.Remove(venta);
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al anular venta: {ex.Message}");
+                await transaction.RollbackAsync();
+                return false;
+            }
         }
     }
 }

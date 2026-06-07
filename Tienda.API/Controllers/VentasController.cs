@@ -58,11 +58,11 @@ namespace Tienda.API.Controllers
             }
         }
         [HttpGet("filtrar")]
-        public async Task<IActionResult> GetVentasFiltro([FromQuery] DateTime? fecha = null, [FromQuery] int? productoId = null)
+        public async Task<IActionResult> GetVentasFiltro( [FromQuery] DateTime? fecha = null,[FromQuery] DateTime? fechaHasta = null,[FromQuery] int? productoId = null)
         {
             try
             {
-                var ventas = await _ventaService.ObtenerVentasFiltroAsync(fecha, productoId);
+                var ventas = await _ventaService.ObtenerVentasFiltroAsync(fecha, fechaHasta, productoId);
 
                 return Ok(new { data = ventas });
             }
@@ -70,6 +70,17 @@ namespace Tienda.API.Controllers
             {
                 return StatusCode(500, $"Error al obtener las ventas: {ex.Message}");
             }
+        }
+
+        [HttpDelete("anular/{id}")]
+        public async Task<IActionResult> AnularVenta(int id)
+        {
+            var resultado = await _ventaService.AnularVentaAsync(id);
+            if (!resultado)
+            {
+                return BadRequest(new { mensaje = "No se pudo anular la venta o no fue encontrada." });
+            }
+            return Ok(new { mensaje = "Venta anulada con éxito y stock restaurado." });
         }
 
     }

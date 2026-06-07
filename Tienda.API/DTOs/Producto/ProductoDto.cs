@@ -13,7 +13,9 @@
         public string? Abreviatura { get; set; }
         public int StockMinimo { get; set; }
 
-
-
+        // 🌟 AGREGA ESTOS CAMPOS PARA CARGAR LOS COMBOS EN ANGULAR
+        public int? MarcaID { get; set; }
+        public int? TipoProductoID { get; set; }
+        public int? UnidadMedidaID { get; set; }
     }
 }

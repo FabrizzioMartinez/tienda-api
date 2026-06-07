@@ -30,11 +30,14 @@ namespace Tienda.API.Controllers
         [HttpGet("detalle/{id}")]
         public async Task<IActionResult> GetProducto(int id)
         {
+            // 🌟 Ahora 'producto' contendrá el ProductoDto con la Abreviatura mapeada desde SQL
             var producto = await _productoService.GetProductoByIdAsync(id);
+
             if (producto == null)
                 return NotFound(new ApiResponse<object>(null, $"Producto con ID {id} no encontrado"));
 
-            return Ok(new ApiResponse<Producto>(producto, "Producto encontrado"));
+            // 🛠️ Cambiado de ApiResponse<Producto> a ApiResponse<ProductoDto>
+            return Ok(new ApiResponse<ProductoDto>(producto, "Producto encontrado"));
         }
 
         // POST: api/productos/guardar
@@ -62,5 +65,26 @@ namespace Tienda.API.Controllers
             var result = await _productoService.SearchProductosAsync(query);
             return Ok(new ApiResponse<List<ProductoBusquedaDto>>(result, "Búsqueda exitosa"));
         }
+        // PATCH: api/productos/actualizar-stock/5
+        [HttpPatch("actualizar-stock/{id}")]
+        public async Task<IActionResult> PatchStock(int id, [FromBody] int nuevoStock)
+        {
+            try
+            {
+                var result = await _productoService.ActualizarStockAsync(id, nuevoStock);
+
+                if (!result)
+                {
+                    return NotFound(new ApiResponse<object>(null, $"No se encontró el producto con ID: {id}"));
+                }
+
+                return Ok(new ApiResponse<object>(null, "Stock actualizado correctamente"));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiResponse<object>(null, $"Error al actualizar stock: {ex.Message}"));
+            }
+        }
+
     }
 }
